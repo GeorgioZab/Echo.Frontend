@@ -21,6 +21,30 @@ const ChatPage = () => {
     const [foundUsers, setFoundUsers] = useState([]);
     const [newChatTitle, setNewChatTitle] = useState('');
 
+    // --- ПРОВЕРКА РОЛИ АДМИНА ---
+    const [isAdmin, setIsAdmin] = useState(false);
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            try {
+                // Расшифровываем полезную нагрузку (Payload) токена
+                const payloadStr = atob(token.split('.')[1]);
+                const payload = JSON.parse(payloadStr);
+                
+                // Проверяем роль (в зависимости от настроек .NET она может называться 'role' или длинным URI)
+                const role = payload.role || payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+                
+                if (role === 'Admin') {
+                    setIsAdmin(true);
+                }
+            } catch (e) {
+                console.error("Ошибка чтения токена", e);
+            }
+        }
+    }, []);
+    // ----------------------------
+
     // Профили
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [selectedUserProfile, setSelectedUserProfile] = useState(null);
@@ -108,6 +132,22 @@ const ChatPage = () => {
         setSearchTerm('');
     };
 
+    const handleSearchUsers = async () => {
+        if (!searchTerm.trim()) { 
+            setFoundUsers([]); 
+            return; 
+        }
+        try {
+            // Убедись, что путь к контроллеру правильный (api/User/search)
+            const response = await api.get(`/User/search?term=${searchTerm}`);
+            setFoundUsers(response.data);
+            console.log("Пользователи найдены:", response.data);
+        } catch (error) {
+            console.error("Ошибка поиска пользователей:", error);
+            alert("Ошибка при поиске пользователей");
+        }
+    };
+
     return (
         <Box sx={{ height: '100vh', p: 2, boxSizing: 'border-box', bgcolor: '#e5ddd5' }}>
             <Grid container spacing={2} sx={{ height: '100%' }}>
@@ -145,8 +185,13 @@ const ChatPage = () => {
                         
                         <Box sx={{ p: 1, bgcolor: '#f0f2f5', display: 'flex', gap: 1 }}>
                             <IconButton onClick={() => setIsProfileOpen(true)}><SettingsIcon /></IconButton>
-                            <Button variant="contained" color="warning" fullWidth onClick={() => window.location.href = '/admin'}>Админ</Button>
-                            <Button variant="outlined" color="error" onClick={() => { localStorage.clear(); window.location.reload(); }}>Выход</Button>
+                            
+                            {/* Кнопка показывается ТОЛЬКО админам */}
+                            {isAdmin && (
+                                <Button variant="contained" color="warning" fullWidth onClick={() => window.location.href = '/admin'}>Админ</Button>
+                            )}
+
+                            <Button variant="outlined" color="error" fullWidth onClick={() => { localStorage.clear(); window.location.reload(); }}>Выход</Button>
                         </Box>
                     </Paper>
                 </Grid>
@@ -175,7 +220,7 @@ const ChatPage = () => {
                                                         {!isMe && <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main', cursor: 'pointer' }} onClick={() => handleViewProfile(msg.senderId)}>{msg.senderName}</Typography>}
                                                         {msg.imageUrl && <Box component="img" src={msg.imageUrl} sx={{ width: '100%', borderRadius: 1, mb: 1 }} />}
                                                         <Typography>{msg.content}</Typography>
-                                                        <Typography variant="caption" sx={{ display: 'block', textAlign: 'right', opacity: 0.6 }}>{new Date(msg.sentAt).toLocaleTimeString()}</Typography>
+                                                        <Typography variant="caption" sx={{ display: 'block', textAlign: 'right', opacity: 0.6 }}>{new Date(msg.sentAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</Typography>
                                                     </Paper>
                                                 </Box>
                                             );
